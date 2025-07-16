@@ -2,7 +2,6 @@ package main
 
 import (
 	"fmt"
-	"io"
 	"log"
 	"net/http"
 	"sync/atomic"
@@ -22,9 +21,9 @@ func main() {
 
 	mux := http.NewServeMux()
 	mux.Handle("/app/", apiCfg.middlewareMetricsInc(http.StripPrefix("/app/", http.FileServer(http.Dir(filepathRoot)))))
-	mux.HandleFunc("/healthz", handlerReadiness)
-	mux.HandleFunc("/metrics", apiCfg.handlerMetrics)
-	mux.HandleFunc("/reset", apiCfg.handlerReset)
+	mux.HandleFunc("GET /healthz", handlerReadiness)
+	mux.HandleFunc("GET /metrics", apiCfg.handlerMetrics)
+	mux.HandleFunc("POST /reset", apiCfg.handlerReset)
 
 	srv := &http.Server{
 		Addr:    ":" + port,
@@ -38,19 +37,20 @@ func main() {
 func handlerReadiness(resp http.ResponseWriter, req *http.Request) {
 	resp.Header().Set("Content-Type", "text/plain; charset=utf-8")
 	resp.WriteHeader(http.StatusOK)
-	io.WriteString(resp, "OK")
+	resp.Write([]byte(http.StatusText(http.StatusOK)))
 }
 
 func (cfg *apiConfig) handlerMetrics(resp http.ResponseWriter, req *http.Request) {
 	hits := cfg.fileserverHits.Load()
 	resp.Header().Set("Content-Type", "text/plain; charset=utf-8")
 	resp.WriteHeader(http.StatusOK)
-	io.WriteString(resp, fmt.Sprintf("Hits: %d", hits))
+	resp.Write([]byte(fmt.Sprintf("Hits: %d", hits)))
 }
 
 func (cfg *apiConfig) handlerReset(resp http.ResponseWriter, req *http.Request) {
 	cfg.fileserverHits.Store(0)
 	resp.WriteHeader(http.StatusOK)
+	resp.Write([]byte("Hits reset to 0"))
 }
 
 func (cfg *apiConfig) middlewareMetricsInc(next http.Handler) http.Handler {
