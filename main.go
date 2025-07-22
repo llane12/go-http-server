@@ -1,6 +1,7 @@
 package main
 
 import (
+	"encoding/json"
 	"fmt"
 	"log"
 	"net/http"
@@ -22,6 +23,7 @@ func main() {
 	mux := http.NewServeMux()
 	mux.Handle("/app/", apiCfg.middlewareMetricsInc(http.StripPrefix("/app/", http.FileServer(http.Dir(filepathRoot)))))
 	mux.HandleFunc("GET /api/healthz", handlerReadiness)
+	mux.HandleFunc("POST /api/validate_chirp", handlerValidateChirp)
 	mux.HandleFunc("GET /admin/metrics", apiCfg.handlerMetrics)
 	mux.HandleFunc("POST /admin/reset", apiCfg.handlerReset)
 
@@ -40,10 +42,37 @@ func handlerReadiness(resp http.ResponseWriter, req *http.Request) {
 	resp.Write([]byte(http.StatusText(http.StatusOK)))
 }
 
-func (cfg *apiConfig) handlerMetrics(resp http.ResponseWriter, req *http.Request) {
+func handlerValidateChirp(w http.ResponseWriter, req *http.Request) {
+	type parameters struct {
+		Body string `json:"body"`
+	}
+	type response struct {
+		Valid bool `json:"valid"`
+	}
+
+	decoder := json.NewDecoder(req.Body)
+	params := parameters{}
+	err := decoder.Decode(&params)
+	if err != nil || len(params.Body) == 0 {
+		respondWithError(w, http.StatusInternalServerError, "Couldn't decode parameters", err)
+		return
+	}
+
+	const maxChirpLength = 140
+	if len(params.Body) > maxChirpLength {
+		respondWithError(w, http.StatusBadRequest, "Chirp is too long", nil)
+		return
+	}
+
+	respondWithJSON(w, http.StatusOK, response{
+		Valid: true,
+	})
+}
+
+func (cfg *apiConfig) handlerMetrics(w http.ResponseWriter, req *http.Request) {
 	hits := cfg.fileserverHits.Load()
-	resp.Header().Set("Content-Type", "text/html; charset=utf-8")
-	resp.WriteHeader(http.StatusOK)
+	w.Header().Set("Content-Type", "text/html; charset=utf-8")
+	w.WriteHeader(http.StatusOK)
 
 	body := fmt.Sprintf(`<html>
 <body>
@@ -51,7 +80,7 @@ func (cfg *apiConfig) handlerMetrics(resp http.ResponseWriter, req *http.Request
 	<p>Chirpy has been visited %d times!</p>
 </body>
 </html>`, hits)
-	resp.Write([]byte(body))
+	w.Write([]byte(body))
 }
 
 func (cfg *apiConfig) handlerReset(resp http.ResponseWriter, req *http.Request) {
