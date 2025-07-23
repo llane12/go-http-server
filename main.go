@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"log"
 	"net/http"
+	"strings"
 	"sync/atomic"
 )
 
@@ -47,7 +48,7 @@ func handlerValidateChirp(w http.ResponseWriter, req *http.Request) {
 		Body string `json:"body"`
 	}
 	type response struct {
-		Valid bool `json:"valid"`
+		CleanedBody string `json:"cleaned_body"`
 	}
 
 	decoder := json.NewDecoder(req.Body)
@@ -63,10 +64,26 @@ func handlerValidateChirp(w http.ResponseWriter, req *http.Request) {
 		respondWithError(w, http.StatusBadRequest, "Chirp is too long", nil)
 		return
 	}
+	cleaned := getCleanedBody(params.Body)
 
 	respondWithJSON(w, http.StatusOK, response{
-		Valid: true,
+		CleanedBody: cleaned,
 	})
+}
+
+func getCleanedBody(body string) string {
+	profanities := map[string]struct{}{
+		"kerfuffle": {},
+		"sharbert":  {},
+		"fornax":    {},
+	}
+	words := strings.Split(body, " ")
+	for i, word := range words {
+		if _, ok := profanities[strings.ToLower(word)]; ok {
+			words[i] = "****"
+		}
+	}
+	return strings.Join(words, " ")
 }
 
 func (cfg *apiConfig) handlerMetrics(w http.ResponseWriter, req *http.Request) {
