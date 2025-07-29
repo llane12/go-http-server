@@ -2,6 +2,7 @@ package main
 
 import (
 	"chirpy/internal/database"
+	"database/sql"
 	"encoding/json"
 	"net/http"
 	"strings"
@@ -52,7 +53,6 @@ func (cfg *apiConfig) handlerAddChirp(w http.ResponseWriter, req *http.Request) 
 }
 
 func (cfg *apiConfig) handlerGetChirps(w http.ResponseWriter, req *http.Request) {
-
 	dbChirps, err := cfg.dbQueries.GetChirps(req.Context())
 	if err != nil {
 		respondWithError(w, http.StatusInternalServerError, "Error getting chirps", err)
@@ -65,6 +65,25 @@ func (cfg *apiConfig) handlerGetChirps(w http.ResponseWriter, req *http.Request)
 	}
 
 	respondWithJSON(w, http.StatusOK, chirps)
+}
+
+func (cfg *apiConfig) handlerGetChirp(w http.ResponseWriter, req *http.Request) {
+	chirpID, err := uuid.Parse(req.PathValue("chirpID"))
+	if err != nil || len(chirpID) == 0 {
+		respondWithError(w, http.StatusBadRequest, "Invalid chirpID", err)
+		return
+	}
+
+	dbChirp, err := cfg.dbQueries.GetChirp(req.Context(), chirpID)
+	if err == sql.ErrNoRows {
+		respondWithError(w, http.StatusNotFound, "", err)
+		return
+	} else if err != nil || len(chirpID) == 0 {
+		respondWithError(w, http.StatusInternalServerError, "Error getting chirp", err)
+		return
+	}
+
+	respondWithJSON(w, http.StatusOK, mapChirp(dbChirp))
 }
 
 func mapChirp(dbChirp database.Chirp) Chirp {
