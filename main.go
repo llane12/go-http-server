@@ -3,12 +3,9 @@ package main
 import (
 	"chirpy/internal/database"
 	"database/sql"
-	"encoding/json"
-	"fmt"
 	"log"
 	"net/http"
 	"os"
-	"strings"
 	"sync/atomic"
 
 	"github.com/joho/godotenv"
@@ -18,6 +15,7 @@ import (
 type apiConfig struct {
 	fileserverHits atomic.Int32
 	dbQueries      *database.Queries
+	platform       string
 }
 
 func main() {
@@ -30,18 +28,22 @@ func main() {
 		log.Fatalf("Error opening database: %v\n", err)
 	}
 
+	// HTTP Server setup
 	const filepathRoot = "."
 	const port = "8080"
 
 	apiCfg := apiConfig{
 		fileserverHits: atomic.Int32{},
 		dbQueries:      database.New(db),
+		platform:       os.Getenv("PLATFORM"),
 	}
 
+	// Endpoints
 	mux := http.NewServeMux()
 	mux.Handle("/app/", apiCfg.middlewareMetricsInc(http.StripPrefix("/app/", http.FileServer(http.Dir(filepathRoot)))))
 	mux.HandleFunc("GET /api/healthz", handlerReadiness)
 	mux.HandleFunc("POST /api/validate_chirp", handlerValidateChirp)
+	mux.HandleFunc("POST /api/users", apiCfg.handlerAddUser)
 	mux.HandleFunc("GET /admin/metrics", apiCfg.handlerMetrics)
 	mux.HandleFunc("POST /admin/reset", apiCfg.handlerReset)
 
@@ -58,69 +60,6 @@ func handlerReadiness(resp http.ResponseWriter, req *http.Request) {
 	resp.Header().Set("Content-Type", "text/plain; charset=utf-8")
 	resp.WriteHeader(http.StatusOK)
 	resp.Write([]byte(http.StatusText(http.StatusOK)))
-}
-
-func handlerValidateChirp(w http.ResponseWriter, req *http.Request) {
-	type parameters struct {
-		Body string `json:"body"`
-	}
-	type response struct {
-		CleanedBody string `json:"cleaned_body"`
-	}
-
-	decoder := json.NewDecoder(req.Body)
-	params := parameters{}
-	err := decoder.Decode(&params)
-	if err != nil || len(params.Body) == 0 {
-		respondWithError(w, http.StatusInternalServerError, "Couldn't decode parameters", err)
-		return
-	}
-
-	const maxChirpLength = 140
-	if len(params.Body) > maxChirpLength {
-		respondWithError(w, http.StatusBadRequest, "Chirp is too long", nil)
-		return
-	}
-	cleaned := getCleanedBody(params.Body)
-
-	respondWithJSON(w, http.StatusOK, response{
-		CleanedBody: cleaned,
-	})
-}
-
-func getCleanedBody(body string) string {
-	profanities := map[string]struct{}{
-		"kerfuffle": {},
-		"sharbert":  {},
-		"fornax":    {},
-	}
-	words := strings.Split(body, " ")
-	for i, word := range words {
-		if _, ok := profanities[strings.ToLower(word)]; ok {
-			words[i] = "****"
-		}
-	}
-	return strings.Join(words, " ")
-}
-
-func (cfg *apiConfig) handlerMetrics(w http.ResponseWriter, req *http.Request) {
-	hits := cfg.fileserverHits.Load()
-	w.Header().Set("Content-Type", "text/html; charset=utf-8")
-	w.WriteHeader(http.StatusOK)
-
-	body := fmt.Sprintf(`<html>
-<body>
-	<h1>Welcome, Chirpy Admin</h1>
-	<p>Chirpy has been visited %d times!</p>
-</body>
-</html>`, hits)
-	w.Write([]byte(body))
-}
-
-func (cfg *apiConfig) handlerReset(resp http.ResponseWriter, req *http.Request) {
-	cfg.fileserverHits.Store(0)
-	resp.WriteHeader(http.StatusOK)
-	resp.Write([]byte("Hits reset to 0"))
 }
 
 func (cfg *apiConfig) middlewareMetricsInc(next http.Handler) http.Handler {
