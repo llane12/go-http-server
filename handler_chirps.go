@@ -23,9 +23,6 @@ func (cfg *apiConfig) handlerAddChirp(w http.ResponseWriter, req *http.Request) 
 		Body   string    `json:"body"`
 		UserId uuid.UUID `json:"user_id"`
 	}
-	type response struct {
-		Chirp
-	}
 
 	decoder := json.NewDecoder(req.Body)
 	params := parameters{}
@@ -51,17 +48,33 @@ func (cfg *apiConfig) handlerAddChirp(w http.ResponseWriter, req *http.Request) 
 		return
 	}
 
-	chirp := Chirp{
+	respondWithJSON(w, http.StatusCreated, mapChirp(dbChirp))
+}
+
+func (cfg *apiConfig) handlerGetChirps(w http.ResponseWriter, req *http.Request) {
+
+	dbChirps, err := cfg.dbQueries.GetChirps(req.Context())
+	if err != nil {
+		respondWithError(w, http.StatusInternalServerError, "Error getting chirps", err)
+		return
+	}
+
+	chirps := make([]Chirp, 0, len(dbChirps))
+	for _, dbChirp := range dbChirps {
+		chirps = append(chirps, mapChirp(dbChirp))
+	}
+
+	respondWithJSON(w, http.StatusOK, chirps)
+}
+
+func mapChirp(dbChirp database.Chirp) Chirp {
+	return Chirp{
 		ID:        dbChirp.ID,
 		CreatedAt: dbChirp.CreatedAt,
 		UpdatedAt: dbChirp.UpdatedAt,
 		Body:      dbChirp.Body,
 		UserId:    dbChirp.UserID,
 	}
-
-	respondWithJSON(w, http.StatusCreated, response{
-		Chirp: chirp,
-	})
 }
 
 func getCleanedBody(body string) string {
