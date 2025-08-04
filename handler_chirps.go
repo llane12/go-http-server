@@ -6,6 +6,7 @@ import (
 	"database/sql"
 	"encoding/json"
 	"net/http"
+	"slices"
 	"strings"
 	"time"
 
@@ -69,7 +70,18 @@ func (cfg *apiConfig) handlerAddChirp(w http.ResponseWriter, req *http.Request) 
 }
 
 func (cfg *apiConfig) handlerGetChirps(w http.ResponseWriter, req *http.Request) {
+	sortString := req.URL.Query().Get("sort")
 	authorIDString := req.URL.Query().Get("author_id")
+
+	desc := false
+	if len(sortString) > 0 {
+		if sortString != "asc" && sortString != "desc" {
+			respondWithError(w, http.StatusBadRequest, "Invalid sort parameter value", nil)
+			return
+		}
+
+		desc = sortString == "asc"
+	}
 
 	var dbChirps []database.Chirp
 
@@ -93,6 +105,14 @@ func (cfg *apiConfig) handlerGetChirps(w http.ResponseWriter, req *http.Request)
 		}
 		dbChirps = dbChirps2
 	}
+
+	slices.SortFunc(dbChirps, func(a, b database.Chirp) int {
+		if desc {
+			return a.CreatedAt.Compare(b.CreatedAt)
+		} else {
+			return b.CreatedAt.Compare(a.CreatedAt)
+		}
+	})
 
 	chirps := make([]Chirp, 0, len(dbChirps))
 	for _, dbChirp := range dbChirps {
