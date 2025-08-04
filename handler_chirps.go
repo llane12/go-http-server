@@ -28,7 +28,7 @@ func (cfg *apiConfig) handlerAddChirp(w http.ResponseWriter, req *http.Request) 
 	// Authorization
 	tokenString, err := auth.GetBearerToken(req.Header)
 	if err != nil {
-		respondWithError(w, http.StatusBadRequest, "Invalid Authorization header", err)
+		respondWithError(w, http.StatusUnauthorized, "Invalid Authorization header", err)
 		return
 	}
 

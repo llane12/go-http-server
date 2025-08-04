@@ -18,7 +18,8 @@ SELECT * FROM users WHERE id = (
     SELECT user_id FROM refresh_tokens WHERE token = $1
 );
 
--- name: RevokeRefreshToken :exec
+-- name: RevokeRefreshToken :one
 UPDATE refresh_tokens
 SET updated_at = NOW(), revoked_at = NOW()
-WHERE token = $1;
+WHERE token = $1
+RETURNING *;

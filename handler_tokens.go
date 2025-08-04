@@ -14,7 +14,7 @@ func (cfg *apiConfig) handlerRefresh(w http.ResponseWriter, req *http.Request) {
 
 	tokenString, err := auth.GetBearerToken(req.Header)
 	if err != nil {
-		respondWithError(w, http.StatusBadRequest, "Invalid Authorization header", err)
+		respondWithError(w, http.StatusUnauthorized, "Invalid Authorization header", err)
 		return
 	}
 
@@ -52,11 +52,11 @@ func (cfg *apiConfig) handlerRefresh(w http.ResponseWriter, req *http.Request) {
 func (cfg *apiConfig) handlerRevoke(w http.ResponseWriter, req *http.Request) {
 	tokenString, err := auth.GetBearerToken(req.Header)
 	if err != nil {
-		respondWithError(w, http.StatusBadRequest, "Invalid Authorization header", err)
+		respondWithError(w, http.StatusUnauthorized, "Invalid Authorization header", err)
 		return
 	}
 
-	err = cfg.dbQueries.RevokeRefreshToken(req.Context(), tokenString)
+	_, err = cfg.dbQueries.RevokeRefreshToken(req.Context(), tokenString)
 	if err != nil {
 		respondWithError(w, http.StatusInternalServerError, "Error revoking refresh token", err)
 		return
