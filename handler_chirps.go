@@ -94,12 +94,54 @@ func (cfg *apiConfig) handlerGetChirp(w http.ResponseWriter, req *http.Request) 
 	if err == sql.ErrNoRows {
 		respondWithError(w, http.StatusNotFound, "", err)
 		return
-	} else if err != nil || len(chirpID) == 0 {
+	} else if err != nil {
 		respondWithError(w, http.StatusInternalServerError, "Error getting chirp", err)
 		return
 	}
 
 	respondWithJSON(w, http.StatusOK, mapChirp(dbChirp))
+}
+
+func (cfg *apiConfig) handlerDeleteChirp(w http.ResponseWriter, req *http.Request) {
+	// Authorization
+	tokenString, err := auth.GetBearerToken(req.Header)
+	if err != nil {
+		respondWithError(w, http.StatusUnauthorized, "Invalid Authorization header", err)
+		return
+	}
+
+	userID, err := auth.ValidateJWT(tokenString, cfg.tokenSecret)
+	if err != nil {
+		respondWithError(w, http.StatusUnauthorized, "Error validating token", err)
+		return
+	}
+
+	// Get chirp
+	chirpID, err := uuid.Parse(req.PathValue("chirpID"))
+	if err != nil || len(chirpID) == 0 {
+		respondWithError(w, http.StatusBadRequest, "Invalid chirpID", err)
+		return
+	}
+
+	dbChirp, err := cfg.dbQueries.GetChirp(req.Context(), chirpID)
+	if err == sql.ErrNoRows {
+		respondWithError(w, http.StatusNotFound, "", err)
+		return
+	} else if err != nil {
+		respondWithError(w, http.StatusInternalServerError, "Error getting chirp", err)
+		return
+	} else if dbChirp.UserID != userID {
+		respondWithError(w, http.StatusForbidden, "", err)
+		return
+	}
+
+	err = cfg.dbQueries.DeleteChirp(req.Context(), chirpID)
+	if err != nil {
+		respondWithError(w, http.StatusInternalServerError, "Error deleting chirp", err)
+		return
+	}
+
+	w.WriteHeader(http.StatusNoContent)
 }
 
 func mapChirp(dbChirp database.Chirp) Chirp {
